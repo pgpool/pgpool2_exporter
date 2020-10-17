@@ -143,8 +143,39 @@ var (
 			"port":                      {LABEL, "Backend port"},
 			"role":                      {LABEL, "Role (primary or standby)"},
 			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"select_cnt":                {GAUGE, "SELECT query counts issued to each backend"},
+			"select_cnt":                {GAUGE, "SELECT statement counts issued to each backend"},
 			"replication_delay":         {GAUGE, "Replication delay"},
+		},
+		"pool_backend_stats": {
+			"hostname":                  {LABEL, "Backend hostname"},
+			"port":                      {LABEL, "Backend port"},
+			"role":                      {LABEL, "Role (primary or standby)"},
+			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"select_cnt":                {GAUGE, "SELECT statement counts issued to each backend"},
+			"insert_cnt":                {GAUGE, "INSERT statement counts issued to each backend"},
+			"update_cnt":                {GAUGE, "UPDATE statement counts issued to each backend"},
+			"delete_cnt":                {GAUGE, "DELETE statement counts issued to each backend"},
+			"ddl_cnt":                   {GAUGE, "DDL statement counts issued to each backend"},
+			"other_cnt":                 {GAUGE, "other statement counts issued to each backend"},
+			"panic_cnt":                 {GAUGE, "Panic message counts returned from backend"},
+			"fatal_cnt":                 {GAUGE, "Fatal message counts returned from backend)"},
+			"error_cnt":                 {GAUGE, "Error message counts returned from backend"},
+		},
+		"pool_health_check_stats": {
+			"hostname":                  {LABEL, "Backend hostname"},
+			"port":                      {LABEL, "Backend port"},
+			"role":                      {LABEL, "Role (primary or standby)"},
+			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"total_count":               {GAUGE, "Number of health check count in total"},
+			"success_count":             {GAUGE, "Number of successful health check count in total"},
+			"fail_count":                {GAUGE, "Number of failed health check count in total"},
+			"skip_count":                {GAUGE, "Number of skipped health check count in total"},
+			"retry_count":               {GAUGE, "Number of retried health check count in total"},
+			"average_retry_count":       {GAUGE, "Number of average retried health check count in a health check session"},
+			"max_retry_count":           {GAUGE, "Number of maximum retried health check count in a health check session"},
+			"max_duration":              {GAUGE, "Maximum health check duration in Millie seconds"},
+			"min_duration":              {GAUGE, "Minimum health check duration in Millie seconds"},
+			"average_duration":          {GAUGE, "Average health check duration in Millie seconds"},
 		},
 		"pool_processes": {
 			"pool_pid":                  {DISCARD, "PID of Pgpool-II child processes"},
@@ -237,7 +268,7 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 	if namespace == "pool_processes" {
 		var frontend_total float64
 		var frontend_used float64
-		
+
 		for rows.Next() {
 			err = rows.Scan(scanArgs...)
 			if err != nil {
