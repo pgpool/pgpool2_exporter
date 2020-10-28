@@ -49,4 +49,22 @@ pgpool2_pool_cache_cache_hit_ratio | Query cache hit ratio
 pgpool2_pool_cache_num_cache_entries | Number of used cache entries
 pgpool2_pool_cache_num_hash_entries | Number of total hash entries
 pgpool2_pool_cache_used_hash_entries | Number of used hash entries
-
+pgpool2_pool_backend_stats_select_cnt | SELECT statement counts issued to each backend
+pgpool2_pool_backend_stats_insert_cnt | INSERT statement counts issued to each backend
+pgpool2_pool_backend_stats_update_cnt | UPDATE statement counts issued to each backend
+pgpool2_pool_backend_stats_delete_cnt | DELETE statement counts issued to each backend
+pgpool2_pool_backend_stats_ddl_cnt | DDL statement counts issued to each backend
+pgpool2_pool_backend_stats_other_cnt | other statement counts issued to each backend
+pgpool2_pool_backend_stats_panic_cnt | Panic message counts issued to each backend
+pgpool2_pool_backend_stats_fatal_cnt | Fatal message counts issued to each backend
+pgpool2_pool_backend_stats_error_cnt | Error message counts issued to each backend
+pgpool2_pool_health_check_stats_total_count | Number of health check count in total
+pgpool2_pool_health_check_stats_success_count | Number of successful health check count in total
+pgpool2_pool_health_check_stats_fail_count | Number of failed health check count in total
+pgpool2_pool_health_check_stats_skip_count | Number of skipped health check count in total
+pgpool2_pool_health_check_stats_retry_count | Number of retried health check count in total
+pgpool2_pool_health_check_stats_average_retry_count | Number of average retried health check count in a health check session
+pgpool2_pool_health_check_stats_max_retry_count | Number of maximum retried health check count in a health check session
+pgpool2_pool_health_check_stats_max_duration | Maximum health check duration in Millie seconds
+pgpool2_pool_hpgpool2_pool_health_check_stats_min_duration | Minimum health check duration in Millie seconds
+pgpool2_pool_health_check_stats_average_duration | Average health check duration in Millie seconds
