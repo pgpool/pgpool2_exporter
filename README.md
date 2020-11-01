@@ -55,9 +55,9 @@ pgpool2_pool_backend_stats_update_cnt | UPDATE statement counts issued to each b
 pgpool2_pool_backend_stats_delete_cnt | DELETE statement counts issued to each backend
 pgpool2_pool_backend_stats_ddl_cnt | DDL statement counts issued to each backend
 pgpool2_pool_backend_stats_other_cnt | other statement counts issued to each backend
-pgpool2_pool_backend_stats_panic_cnt | Panic message counts issued to each backend
-pgpool2_pool_backend_stats_fatal_cnt | Fatal message counts issued to each backend
-pgpool2_pool_backend_stats_error_cnt | Error message counts issued to each backend
+pgpool2_pool_backend_stats_panic_cnt | Panic message counts returned from backend
+pgpool2_pool_backend_stats_fatal_cnt | Fatal message counts returned from backend
+pgpool2_pool_backend_stats_error_cnt | Error message counts returned from backend
 pgpool2_pool_health_check_stats_total_count | Number of health check count in total
 pgpool2_pool_health_check_stats_success_count | Number of successful health check count in total
 pgpool2_pool_health_check_stats_fail_count | Number of failed health check count in total
