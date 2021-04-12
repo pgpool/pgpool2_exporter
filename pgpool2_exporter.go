@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	
+
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
@@ -275,7 +275,7 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 				return []error{}, errors.New(fmt.Sprintln("Error retrieving rows:", namespace, err))
 			}
 			frontend_total++
-			// Loop over column names to find currently connected backend database 
+			// Loop over column names to find currently connected backend database
 			for idx, columnName := range columnNames {
 				if columnName == "database" {
 					if valueDatabase, _ := dbToString(columnData[idx]); len(valueDatabase) != 0 {
@@ -418,7 +418,7 @@ func dbToString(t interface{}) (string, bool) {
 		return v, true
 	case bool:
 		if v {
-			return "true", true 
+			return "true", true
 		}
 		return "false", true
 	default:
@@ -528,11 +528,10 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 			}
 			e.up.Set(0)
 			return
-		} else {
-			e.up.Set(1)
 		}
 	}
 
+	e.up.Set(1)
 	e.error.Set(0)
 
 	e.mutex.RLock()
