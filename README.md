@@ -66,5 +66,5 @@ pgpool2_pool_health_check_stats_retry_count | Number of retried health check cou
 pgpool2_pool_health_check_stats_average_retry_count | Number of average retried health check count in a health check session
 pgpool2_pool_health_check_stats_max_retry_count | Number of maximum retried health check count in a health check session
 pgpool2_pool_health_check_stats_max_duration | Maximum health check duration in Millie seconds
-pgpool2_pool_hpgpool2_pool_health_check_stats_min_duration | Minimum health check duration in Millie seconds
+pgpool2_pool_health_check_stats_min_duration | Minimum health check duration in Millie seconds
 pgpool2_pool_health_check_stats_average_duration | Average health check duration in Millie seconds
