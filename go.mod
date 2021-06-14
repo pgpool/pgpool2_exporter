@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/golang/protobuf v1.4.0 // indirect
 	github.com/google/go-github/v25 v25.1.3 // indirect
 	github.com/lib/pq v1.3.0

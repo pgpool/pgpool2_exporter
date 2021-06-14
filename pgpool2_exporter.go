@@ -8,11 +8,13 @@ import (
 	"database/sql"
 	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
-	
+
 	_ "github.com/lib/pq"
+	"github.com/blang/semver"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
@@ -191,6 +193,11 @@ var (
 		},
 	}
 )
+
+// Pgpool-II version
+var pgpoolVersionRegex = regexp.MustCompile(`^((\d+)(\.\d+)(\.\d+)?)`)
+var version42 = semver.MustParse("4.2.0")
+var pgpoolSemver semver.Version
 
 func NewExporter(dsn string, namespace string) *Exporter {
 
@@ -437,12 +444,56 @@ func parseStatusField(value string) (float64) {
 	return 0.0
 }
 
+// Retrieve Pgpool-II version.
+func queryVersion(db *sql.DB) (semver.Version, error) {
+
+	log.Debugln("Querying Pgpool-II version")
+
+	versionRows, err := db.Query("SHOW POOL_VERSION;")
+	if err != nil {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error querying SHOW POOL_VERSION: ", err))
+	}
+	defer versionRows.Close()
+
+	var columnNames []string
+	columnNames, err = versionRows.Columns()
+	if err != nil {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving column name for version: ", err))
+	}
+	if len(columnNames) != 1 || columnNames[0] != "pool_version" {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error returning Pgpool-II version: ", err))
+	}
+
+	var pgpoolVersion string
+	for versionRows.Next() {
+		err := versionRows.Scan(&pgpoolVersion)
+		if err != nil {
+			return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving SHOW POOL_VERSION rows: ", err))
+		}
+	}
+
+	v := pgpoolVersionRegex.FindStringSubmatch(pgpoolVersion)
+	if len(v) > 1 {
+		log.Debugln("Pgpool-II version: %s ", v[1])
+		return semver.ParseTolerant(v[1])
+	}
+
+	return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving Pgpool-II version: ", err))
+}
+
 // Iterate through all the namespace mappings in the exporter and run their queries.
 func queryNamespaceMappings(ch chan<- prometheus.Metric, db *sql.DB, metricMap map[string]MetricMapNamespace) map[string]error {
 	// Return a map of namespace -> errors
 	namespaceErrors := make(map[string]error)
 
 	for namespace, mapping := range metricMap {
+		// pool_backend_stats and pool_health_check_stats can not be used before 4.1.
+		if namespace == "pool_backend_stats" || namespace == "pool_health_check_stats" {
+			if pgpoolSemver.LT(version42) {
+				continue
+			}
+		}
+
 		log.Debugln("Querying namespace: ", namespace)
 		nonFatalErrors, err := queryNamespaceMapping(ch, db, namespace, mapping)
 		// Serious error - a namespace disappeard
@@ -606,6 +657,13 @@ func main() {
 	dsn := os.Getenv("DATA_SOURCE_NAME")
 	exporter := NewExporter(dsn, namespace)
 	prometheus.MustRegister(exporter)
+
+	// Retrieve Pgpool-II version
+	v, err := queryVersion(exporter.db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pgpoolSemver = v
 
 	log.Infof("Starting pgpool2_exporter %s for %s", version.Info(), dsn)
 	log.Infoln("Listening on", *listenAddress)
