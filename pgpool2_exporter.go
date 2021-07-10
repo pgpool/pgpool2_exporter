@@ -665,7 +665,7 @@ func main() {
 	}
 	pgpoolSemver = v
 
-	log.Infof("Starting pgpool2_exporter %s for %s", version.Info(), dsn)
+	log.Infoln("Starting pgpool2_exporter", version.Info())
 	log.Infoln("Listening on", *listenAddress)
 
 	http.Handle(*metricsPath, promhttp.Handler())
