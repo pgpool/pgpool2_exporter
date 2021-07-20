@@ -4,7 +4,6 @@ Prometheus exporter for [Pgpool-II](https://pgpool.net) metrics.
 
 Supported Pgpool-II 3.6 and later.
 
-
 ## Building and running
 
 ### Build
@@ -16,7 +15,7 @@ $ make
 
 Running using an environment variable:
 ```
-$ export DATA_SOURCE_NAME="postgresql://user:password@hostname:port/dbname"
+$ export DATA_SOURCE_NAME="postgresql://user:password@hostname:port/dbname?sslmode=disable"
 $ ./pgpool2_exporter <flags>
 ```
     
@@ -27,6 +26,9 @@ $ ./pgpool2_exporter --help
     
  ### Flags
 
+* `help` 
+  Show context-sensitive help (also try --help-long and --help-man).
+  
 * `version`
   Print version information.
   
@@ -36,7 +38,16 @@ $ ./pgpool2_exporter --help
 * `web.telemetry-path`
   Path under which to expose metrics. (default "/metrics")
   
-## Metrics
+* `log.level`
+  Set logging level: one of debug, info, warn, error.
+
+* `log.format` 
+  Set the log format: one of logfmt, json.
+  
+## Environment Variables
+
+  
+### Metrics
 
 name | Description
 :---|:---
