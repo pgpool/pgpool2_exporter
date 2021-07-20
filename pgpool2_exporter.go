@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,18 +12,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-kit/kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/blang/semver"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
-	"github.com/prometheus/common/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
+	"github.com/prometheus/common/version"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	showVersion             = flag.Bool("version", false, "Print version information.")
-	listenAddress           = flag.String("web.listen-address", ":9719", "Address on which to expose metrics and web interface.")
-	metricsPath             = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
+	listenAddress           = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
+	metricsPath             = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	logger                  = promlog.New(&promlog.Config{})
 )
 
 const (
@@ -204,7 +206,8 @@ func NewExporter(dsn string, namespace string) *Exporter {
 	db, err := getDBConn(dsn)
 
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
 	}
 
 	return &Exporter{
@@ -282,7 +285,7 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 				return []error{}, errors.New(fmt.Sprintln("Error retrieving rows:", namespace, err))
 			}
 			frontend_total++
-			// Loop over column names to find currently connected backend database 
+			// Loop over column names to find currently connected backend database
 			for idx, columnName := range columnNames {
 				if columnName == "database" {
 					if valueDatabase, _ := dbToString(columnData[idx]); len(valueDatabase) != 0 {
@@ -391,7 +394,7 @@ func dbToFloat64(t interface{}) (float64, bool) {
 	case string:
 		result, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			log.Infoln("Could not parse string:", err)
+			level.Error(logger).Log("msg", "Could not parse string", "err", err)
 			return math.NaN(), false
 		}
 		return result, true
@@ -447,38 +450,38 @@ func parseStatusField(value string) (float64) {
 // Retrieve Pgpool-II version.
 func queryVersion(db *sql.DB) (semver.Version, error) {
 
-	log.Debugln("Querying Pgpool-II version")
+	level.Debug(logger).Log("msg", "Querying Pgpool-II version")
 
 	versionRows, err := db.Query("SHOW POOL_VERSION;")
 	if err != nil {
-		return semver.Version{}, errors.New(fmt.Sprintln("Error querying SHOW POOL_VERSION: ", err))
+		return semver.Version{}, errors.New(fmt.Sprintln("Error querying SHOW POOL_VERSION:", err))
 	}
 	defer versionRows.Close()
 
 	var columnNames []string
 	columnNames, err = versionRows.Columns()
 	if err != nil {
-		return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving column name for version: ", err))
+		return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving column name for version:", err))
 	}
 	if len(columnNames) != 1 || columnNames[0] != "pool_version" {
-		return semver.Version{}, errors.New(fmt.Sprintln("Error returning Pgpool-II version: ", err))
+		return semver.Version{}, errors.New(fmt.Sprintln("Error returning Pgpool-II version:", err))
 	}
 
 	var pgpoolVersion string
 	for versionRows.Next() {
 		err := versionRows.Scan(&pgpoolVersion)
 		if err != nil {
-			return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving SHOW POOL_VERSION rows: ", err))
+			return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving SHOW POOL_VERSION rows:", err))
 		}
 	}
 
 	v := pgpoolVersionRegex.FindStringSubmatch(pgpoolVersion)
 	if len(v) > 1 {
-		log.Debugln("Pgpool-II version: %s ", v[1])
+		level.Debug(logger).Log("pgpool_version", v[1])
 		return semver.ParseTolerant(v[1])
 	}
 
-	return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving Pgpool-II version: ", err))
+	return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving Pgpool-II version:", err))
 }
 
 // Iterate through all the namespace mappings in the exporter and run their queries.
@@ -494,17 +497,17 @@ func queryNamespaceMappings(ch chan<- prometheus.Metric, db *sql.DB, metricMap m
 			}
 		}
 
-		log.Debugln("Querying namespace: ", namespace)
+		level.Debug(logger).Log("msg", "Querying namespace", "namespace", namespace)
 		nonFatalErrors, err := queryNamespaceMapping(ch, db, namespace, mapping)
 		// Serious error - a namespace disappeard
 		if err != nil {
 			namespaceErrors[namespace] = err
-			log.Infoln(err)
+			level.Info(logger).Log("msg", "namespace disappeard", "err", err)
 		}
 		// Non-serious errors - likely version or parsing problems.
 		if len(nonFatalErrors) > 0 {
 			for _, err := range nonFatalErrors {
-				log.Infoln(err.Error())
+				level.Info(logger).Log("msg", "error parsing", "err", err.Error())
 			}
 		}
 	}
@@ -563,19 +566,19 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	// Check connection availability and close the connection if it fails.
 	if err = e.db.Ping(); err != nil {
-		log.Errorf("Error pinging Pgpool-II: %s", err)
+		level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 		if cerr := e.db.Close(); cerr != nil {
-			log.Errorf("Error while closing non-pinging connection: %s", cerr)
+			level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 		}
-		log.Infoln("Reconnecting to Pgpool-II")
+		level.Info(logger).Log("msg", "Reconnecting to Pgpool-II")
 		e.db, err = sql.Open("postgres", e.dsn)
 		e.db.SetMaxOpenConns(1)
 		e.db.SetMaxIdleConns(1)
 
 		if err = e.db.Ping(); err != nil {
-			log.Errorf("Error pinging Pgpool-II: %s", err)
+			level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 			if cerr := e.db.Close(); cerr != nil {
-				log.Errorf("Error while closing non-pinging connection: %s", cerr)
+				level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 			}
 			e.up.Set(0)
 			return
@@ -591,7 +594,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	errMap := queryNamespaceMappings(ch, e.db, e.metricMap)
 	if len(errMap) > 0 {
-		log.Fatal(errMap)
+		level.Error(logger).Log("err", errMap)
 		e.error.Set(1)
 	}
 }
@@ -647,12 +650,11 @@ func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace strin
 }
 
 func main() {
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Fprintln(os.Stdout, version.Print("pgpool2_exporter"))
-		os.Exit(0)
-	}
+	promlogConfig := &promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+	kingpin.Version(version.Print("pgpool2_exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
 
 	dsn := os.Getenv("DATA_SOURCE_NAME")
 	exporter := NewExporter(dsn, namespace)
@@ -661,17 +663,20 @@ func main() {
 	// Retrieve Pgpool-II version
 	v, err := queryVersion(exporter.db)
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("err", err)
 	}
 	pgpoolSemver = v
 
-	log.Infoln("Starting pgpool2_exporter", version.Info())
-	log.Infoln("Listening on", *listenAddress)
+	level.Info(logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Listening on address", "address", *listenAddress)
 
 	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf(landingPage, *metricsPath)))
 	})
 
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 }
