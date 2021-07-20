@@ -45,7 +45,31 @@ $ ./pgpool2_exporter --help
   Set the log format: one of logfmt, json.
   
 ## Environment Variables
+### Docker
 
+This package is available for Docker. The following environment variables configure the docker container:
+
+* `POSTGRES_USERNAME`
+  PostgreSQL user name. Default is `postgres`.
+
+* `POSTGRES_PASSWORD`
+  PostgreSQL user password. Default is `postgres`.
+  
+* `PGPOOL_SERVICE`
+  Pgpool-II hostname. Default is `localhost`.
+  
+* `PGPOOL_SERVICE_PORT`
+  Pgpool-II port number. Default is `9999`.
+
+```
+docker run \
+  --net=host -it --rm \
+  -e POSTGRES_USERNAME=<username> \
+  -e POSTGRES_PASSWORD=<password> \
+  -e PGPOOL_SERVICE=<hostname> \
+  -e PGPOOL_SERVICE_PORT=<port> \
+  pgpool/pgpool2_exporter:latest
+```
   
 ### Metrics
 
