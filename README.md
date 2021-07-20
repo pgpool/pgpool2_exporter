@@ -44,7 +44,6 @@ $ ./pgpool2_exporter --help
 * `log.format` 
   Set the log format: one of logfmt, json.
   
-## Environment Variables
 ### Docker
 
 This package is available for Docker. The following environment variables configure the docker container:
