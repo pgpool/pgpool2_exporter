@@ -93,7 +93,7 @@ pgpool2_pool_backend_stats_panic_cnt | Pgpool-II 4.2+ | | Panic message counts r
 pgpool2_pool_backend_stats_fatal_cnt | Pgpool-II 4.2+ | | Fatal message counts returned from backend
 pgpool2_pool_backend_stats_error_cnt | Pgpool-II 4.2+ | | Error message counts returned from backend
 pgpool2_pool_health_check_stats_total_count | Pgpool-II 4.2+ | | Number of health check count in total
-pgpool2_pool_health_check_stats_success_count | Pgpool-II 4.2 + | | Number of successful health check count in total
+pgpool2_pool_health_check_stats_success_count | Pgpool-II 4.2+ | | Number of successful health check count in total
 pgpool2_pool_health_check_stats_fail_count | Pgpool-II 4.2+ | | Number of failed health check count in total
 pgpool2_pool_health_check_stats_skip_count | Pgpool-II 4.2+ | | Number of skipped health check count in total
 pgpool2_pool_health_check_stats_retry_count | Pgpool-II 4.2+ | | Number of retried health check count in total
