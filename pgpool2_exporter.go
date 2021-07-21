@@ -1,28 +1,55 @@
+/*
+Copyright (c) 2021 PgPool Global Development Group
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 package main
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"database/sql"
 	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
+
+	"github.com/go-kit/kit/log/level"
 	_ "github.com/lib/pq"
+	"github.com/blang/semver"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
-	"github.com/prometheus/common/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promlog/flag"
+	"github.com/prometheus/common/version"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	showVersion             = flag.Bool("version", false, "Print version information.")
-	listenAddress           = flag.String("web.listen-address", ":9719", "Address on which to expose metrics and web interface.")
-	metricsPath             = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
+	listenAddress           = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
+	metricsPath             = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	logger                  = promlog.New(&promlog.Config{})
 )
 
 const (
@@ -192,12 +219,18 @@ var (
 	}
 )
 
+// Pgpool-II version
+var pgpoolVersionRegex = regexp.MustCompile(`^((\d+)(\.\d+)(\.\d+)?)`)
+var version42 = semver.MustParse("4.2.0")
+var pgpoolSemver semver.Version
+
 func NewExporter(dsn string, namespace string) *Exporter {
 
 	db, err := getDBConn(dsn)
 
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
 	}
 
 	return &Exporter{
@@ -384,7 +417,7 @@ func dbToFloat64(t interface{}) (float64, bool) {
 	case string:
 		result, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			log.Infoln("Could not parse string:", err)
+			level.Error(logger).Log("msg", "Could not parse string", "err", err)
 			return math.NaN(), false
 		}
 		return result, true
@@ -437,23 +470,67 @@ func parseStatusField(value string) (float64) {
 	return 0.0
 }
 
+// Retrieve Pgpool-II version.
+func queryVersion(db *sql.DB) (semver.Version, error) {
+
+	level.Debug(logger).Log("msg", "Querying Pgpool-II version")
+
+	versionRows, err := db.Query("SHOW POOL_VERSION;")
+	if err != nil {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error querying SHOW POOL_VERSION:", err))
+	}
+	defer versionRows.Close()
+
+	var columnNames []string
+	columnNames, err = versionRows.Columns()
+	if err != nil {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving column name for version:", err))
+	}
+	if len(columnNames) != 1 || columnNames[0] != "pool_version" {
+		return semver.Version{}, errors.New(fmt.Sprintln("Error returning Pgpool-II version:", err))
+	}
+
+	var pgpoolVersion string
+	for versionRows.Next() {
+		err := versionRows.Scan(&pgpoolVersion)
+		if err != nil {
+			return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving SHOW POOL_VERSION rows:", err))
+		}
+	}
+
+	v := pgpoolVersionRegex.FindStringSubmatch(pgpoolVersion)
+	if len(v) > 1 {
+		level.Debug(logger).Log("pgpool_version", v[1])
+		return semver.ParseTolerant(v[1])
+	}
+
+	return semver.Version{}, errors.New(fmt.Sprintln("Error retrieving Pgpool-II version:", err))
+}
+
 // Iterate through all the namespace mappings in the exporter and run their queries.
 func queryNamespaceMappings(ch chan<- prometheus.Metric, db *sql.DB, metricMap map[string]MetricMapNamespace) map[string]error {
 	// Return a map of namespace -> errors
 	namespaceErrors := make(map[string]error)
 
 	for namespace, mapping := range metricMap {
-		log.Debugln("Querying namespace: ", namespace)
+		// pool_backend_stats and pool_health_check_stats can not be used before 4.1.
+		if namespace == "pool_backend_stats" || namespace == "pool_health_check_stats" {
+			if pgpoolSemver.LT(version42) {
+				continue
+			}
+		}
+
+		level.Debug(logger).Log("msg", "Querying namespace", "namespace", namespace)
 		nonFatalErrors, err := queryNamespaceMapping(ch, db, namespace, mapping)
 		// Serious error - a namespace disappeard
 		if err != nil {
 			namespaceErrors[namespace] = err
-			log.Infoln(err)
+			level.Info(logger).Log("msg", "namespace disappeard", "err", err)
 		}
 		// Non-serious errors - likely version or parsing problems.
 		if len(nonFatalErrors) > 0 {
 			for _, err := range nonFatalErrors {
-				log.Infoln(err.Error())
+				level.Info(logger).Log("msg", "error parsing", "err", err.Error())
 			}
 		}
 	}
@@ -512,19 +589,19 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	// Check connection availability and close the connection if it fails.
 	if err = e.db.Ping(); err != nil {
-		log.Errorf("Error pinging Pgpool-II: %s", err)
+		level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 		if cerr := e.db.Close(); cerr != nil {
-			log.Errorf("Error while closing non-pinging connection: %s", cerr)
+			level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 		}
-		log.Infoln("Reconnecting to Pgpool-II")
+		level.Info(logger).Log("msg", "Reconnecting to Pgpool-II")
 		e.db, err = sql.Open("postgres", e.dsn)
 		e.db.SetMaxOpenConns(1)
 		e.db.SetMaxIdleConns(1)
 
 		if err = e.db.Ping(); err != nil {
-			log.Errorf("Error pinging Pgpool-II: %s", err)
+			level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 			if cerr := e.db.Close(); cerr != nil {
-				log.Errorf("Error while closing non-pinging connection: %s", cerr)
+				level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 			}
 			e.up.Set(0)
 			return
@@ -539,7 +616,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	errMap := queryNamespaceMappings(ch, e.db, e.metricMap)
 	if len(errMap) > 0 {
-		log.Fatal(errMap)
+		level.Error(logger).Log("err", errMap)
 		e.error.Set(1)
 	}
 }
@@ -595,24 +672,33 @@ func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace strin
 }
 
 func main() {
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Fprintln(os.Stdout, version.Print("pgpool2_exporter"))
-		os.Exit(0)
-	}
+	promlogConfig := &promlog.Config{}
+	flag.AddFlags(kingpin.CommandLine, promlogConfig)
+	kingpin.Version(version.Print("pgpool2_exporter"))
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
 
 	dsn := os.Getenv("DATA_SOURCE_NAME")
 	exporter := NewExporter(dsn, namespace)
 	prometheus.MustRegister(exporter)
 
-	log.Infof("Starting pgpool2_exporter %s for %s", version.Info(), dsn)
-	log.Infoln("Listening on", *listenAddress)
+	// Retrieve Pgpool-II version
+	v, err := queryVersion(exporter.db)
+	if err != nil {
+		level.Error(logger).Log("err", err)
+	}
+	pgpoolSemver = v
+
+	level.Info(logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Listening on address", "address", *listenAddress)
 
 	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf(landingPage, *metricsPath)))
 	})
 
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 }
