@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+
 	"github.com/go-kit/kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/blang/semver"
@@ -450,7 +451,7 @@ func dbToString(t interface{}) (string, bool) {
 		return v, true
 	case bool:
 		if v {
-			return "true", true 
+			return "true", true
 		}
 		return "false", true
 	default:
@@ -604,11 +605,10 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 			}
 			e.up.Set(0)
 			return
-		} else {
-			e.up.Set(1)
 		}
 	}
 
+	e.up.Set(1)
 	e.error.Set(0)
 
 	e.mutex.RLock()
