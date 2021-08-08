@@ -389,12 +389,24 @@ func getDBConn(dsn string) (*sql.DB, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	err = db.Ping()
+	err = ping(db)
 	if err != nil {
 		return nil, err
 	}
 
 	return db, nil
+}
+
+// Connect to Pgpool-II and run "SHOW POOL_VERSION;" to check connection availability.
+func ping(db *sql.DB) error {
+
+	rows, err := db.Query("SHOW POOL_VERSION;")
+	if err != nil {
+		return fmt.Errorf("error connecting Pgpool-II: %s", err)
+	}
+	defer rows.Close()
+
+	return nil
 }
 
 // Convert database.sql types to float64s for Prometheus consumption. Null types are mapped to NaN. string and []byte
@@ -603,7 +615,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 	}(time.Now())
 
 	// Check connection availability and close the connection if it fails.
-	if err = e.db.Ping(); err != nil {
+	if err = ping(e.db); err != nil {
 		level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 		if cerr := e.db.Close(); cerr != nil {
 			level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
@@ -613,7 +625,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 		e.db.SetMaxOpenConns(1)
 		e.db.SetMaxIdleConns(1)
 
-		if err = e.db.Ping(); err != nil {
+		if err = ping(e.db); err != nil {
 			level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
 			if cerr := e.db.Close(); cerr != nil {
 				level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
