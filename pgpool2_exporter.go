@@ -402,7 +402,7 @@ func ping(db *sql.DB) error {
 
 	rows, err := db.Query("SHOW POOL_VERSION;")
 	if err != nil {
-		return fmt.Errorf("error connecting Pgpool-II: %s", err)
+		return fmt.Errorf("error connecting to Pgpool-II: %s", err)
 	}
 	defer rows.Close()
 
