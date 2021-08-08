@@ -25,6 +25,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"database/sql"
 	"errors"
@@ -470,6 +471,20 @@ func parseStatusField(value string) (float64) {
 	return 0.0
 }
 
+// Mask user password in DSN
+func maskPassword(dsn string) string {
+	pDSN, err := url.Parse(dsn)
+	if err != nil {
+		return "could not parse DATA_SOURCE_NAME"
+	}
+	// Mask user password in DSN
+	if pDSN.User != nil {
+		pDSN.User = url.UserPassword(pDSN.User.Username(), "MASKED_PASSWORD")
+	}
+
+	return pDSN.String()
+}
+
 // Retrieve Pgpool-II version.
 func queryVersion(db *sql.DB) (semver.Version, error) {
 
@@ -689,7 +704,7 @@ func main() {
 	}
 	pgpoolSemver = v
 
-	level.Info(logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info(), "dsn", maskPassword(dsn))
 	level.Info(logger).Log("msg", "Listening on address", "address", *listenAddress)
 
 	http.Handle(*metricsPath, promhttp.Handler())
