@@ -695,6 +695,9 @@ func main() {
 
 	dsn := os.Getenv("DATA_SOURCE_NAME")
 	exporter := NewExporter(dsn, namespace)
+	defer func() {
+		exporter.db.Close()
+	}()
 	prometheus.MustRegister(exporter)
 
 	// Retrieve Pgpool-II version
