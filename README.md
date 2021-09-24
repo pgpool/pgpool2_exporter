@@ -53,10 +53,13 @@ This package is available for Docker. The following environment variables config
 
 * `POSTGRES_PASSWORD`
   PostgreSQL user password. Default is `postgres`.
-  
+
+* `POSTGRES_DATABASE`
+  Database name. Default is `postgres`.
+
 * `PGPOOL_SERVICE`
   Pgpool-II hostname. Default is `localhost`.
-  
+
 * `PGPOOL_SERVICE_PORT`
   Pgpool-II port number. Default is `9999`.
 
@@ -65,6 +68,7 @@ docker run --name pgpool2_exporter \
   --net=host --rm \
   -e POSTGRES_USERNAME=<username> \
   -e POSTGRES_PASSWORD=<password> \
+  -e POSTGRES_DATABASE=<database> \
   -e PGPOOL_SERVICE=<hostname> \
   -e PGPOOL_SERVICE_PORT=<port> \
   pgpool/pgpool2_exporter:latest
