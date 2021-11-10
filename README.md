@@ -80,6 +80,7 @@ name | Pgpool-II Version | Description
 :---|:---|:---
 pgpool2_frontend_total | 3.6+ | Number of total child processes
 pgpool2_frontend_used | 3.6+ | Number of used child processes
+pgpool2_frontend_used_ratio | 3.6+ | Ratio of used child processes to total child processes (0.0 to 1.0)
 pgpool2_pool_nodes_status | 3.6+ | Backend node Status (1 for up or waiting, 0 for down or unused)
 pgpool2_pool_nodes_replication_delay | 3.6+ | Replication delay
 pgpool2_pool_nodes_select_cnt | 3.6+ | SELECT query counts issued to each backend

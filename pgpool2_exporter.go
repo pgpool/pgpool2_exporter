@@ -23,22 +23,21 @@ SOFTWARE.
 package main
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
-	"database/sql"
-	"errors"
-	"math"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
-
+	"github.com/blang/semver"
 	"github.com/go-kit/kit/log/level"
 	_ "github.com/lib/pq"
-	"github.com/blang/semver"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
@@ -48,14 +47,14 @@ import (
 )
 
 var (
-	listenAddress           = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
-	metricsPath             = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-	logger                  = promlog.New(&promlog.Config{})
+	listenAddress = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
+	metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	logger        = promlog.New(&promlog.Config{})
 )
 
 const (
-	namespace = "pgpool2"
-	exporter  = "exporter"
+	namespace   = "pgpool2"
+	exporter    = "exporter"
 	landingPage = `
 	<html>
 		<head>
@@ -153,69 +152,69 @@ type ColumnMapping struct {
 // Exporter collects Pgpool-II stats from the given server and exports
 // them using the prometheus metrics package.
 type Exporter struct {
-	dsn              string
-	namespace        string
-	mutex            sync.RWMutex
-	duration         prometheus.Gauge
-	up               prometheus.Gauge
-	error            prometheus.Gauge
-	totalScrapes     prometheus.Counter
-	metricMap        map[string]MetricMapNamespace
-	db               *sql.DB
+	dsn          string
+	namespace    string
+	mutex        sync.RWMutex
+	duration     prometheus.Gauge
+	up           prometheus.Gauge
+	error        prometheus.Gauge
+	totalScrapes prometheus.Counter
+	metricMap    map[string]MetricMapNamespace
+	db           *sql.DB
 }
 
 var (
 	metricMaps = map[string]map[string]ColumnMapping{
 		"pool_nodes": {
-			"hostname":                  {LABEL, "Backend hostname"},
-			"port":                      {LABEL, "Backend port"},
-			"role":                      {LABEL, "Role (primary or standby)"},
-			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"select_cnt":                {GAUGE, "SELECT statement counts issued to each backend"},
-			"replication_delay":         {GAUGE, "Replication delay"},
+			"hostname":          {LABEL, "Backend hostname"},
+			"port":              {LABEL, "Backend port"},
+			"role":              {LABEL, "Role (primary or standby)"},
+			"status":            {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"select_cnt":        {GAUGE, "SELECT statement counts issued to each backend"},
+			"replication_delay": {GAUGE, "Replication delay"},
 		},
 		"pool_backend_stats": {
-			"hostname":                  {LABEL, "Backend hostname"},
-			"port":                      {LABEL, "Backend port"},
-			"role":                      {LABEL, "Role (primary or standby)"},
-			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"select_cnt":                {GAUGE, "SELECT statement counts issued to each backend"},
-			"insert_cnt":                {GAUGE, "INSERT statement counts issued to each backend"},
-			"update_cnt":                {GAUGE, "UPDATE statement counts issued to each backend"},
-			"delete_cnt":                {GAUGE, "DELETE statement counts issued to each backend"},
-			"ddl_cnt":                   {GAUGE, "DDL statement counts issued to each backend"},
-			"other_cnt":                 {GAUGE, "other statement counts issued to each backend"},
-			"panic_cnt":                 {GAUGE, "Panic message counts returned from backend"},
-			"fatal_cnt":                 {GAUGE, "Fatal message counts returned from backend)"},
-			"error_cnt":                 {GAUGE, "Error message counts returned from backend"},
+			"hostname":   {LABEL, "Backend hostname"},
+			"port":       {LABEL, "Backend port"},
+			"role":       {LABEL, "Role (primary or standby)"},
+			"status":     {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"select_cnt": {GAUGE, "SELECT statement counts issued to each backend"},
+			"insert_cnt": {GAUGE, "INSERT statement counts issued to each backend"},
+			"update_cnt": {GAUGE, "UPDATE statement counts issued to each backend"},
+			"delete_cnt": {GAUGE, "DELETE statement counts issued to each backend"},
+			"ddl_cnt":    {GAUGE, "DDL statement counts issued to each backend"},
+			"other_cnt":  {GAUGE, "other statement counts issued to each backend"},
+			"panic_cnt":  {GAUGE, "Panic message counts returned from backend"},
+			"fatal_cnt":  {GAUGE, "Fatal message counts returned from backend)"},
+			"error_cnt":  {GAUGE, "Error message counts returned from backend"},
 		},
 		"pool_health_check_stats": {
-			"hostname":                  {LABEL, "Backend hostname"},
-			"port":                      {LABEL, "Backend port"},
-			"role":                      {LABEL, "Role (primary or standby)"},
-			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"total_count":               {GAUGE, "Number of health check count in total"},
-			"success_count":             {GAUGE, "Number of successful health check count in total"},
-			"fail_count":                {GAUGE, "Number of failed health check count in total"},
-			"skip_count":                {GAUGE, "Number of skipped health check count in total"},
-			"retry_count":               {GAUGE, "Number of retried health check count in total"},
-			"average_retry_count":       {GAUGE, "Number of average retried health check count in a health check session"},
-			"max_retry_count":           {GAUGE, "Number of maximum retried health check count in a health check session"},
-			"max_duration":              {GAUGE, "Maximum health check duration in Millie seconds"},
-			"min_duration":              {GAUGE, "Minimum health check duration in Millie seconds"},
-			"average_duration":          {GAUGE, "Average health check duration in Millie seconds"},
+			"hostname":            {LABEL, "Backend hostname"},
+			"port":                {LABEL, "Backend port"},
+			"role":                {LABEL, "Role (primary or standby)"},
+			"status":              {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"total_count":         {GAUGE, "Number of health check count in total"},
+			"success_count":       {GAUGE, "Number of successful health check count in total"},
+			"fail_count":          {GAUGE, "Number of failed health check count in total"},
+			"skip_count":          {GAUGE, "Number of skipped health check count in total"},
+			"retry_count":         {GAUGE, "Number of retried health check count in total"},
+			"average_retry_count": {GAUGE, "Number of average retried health check count in a health check session"},
+			"max_retry_count":     {GAUGE, "Number of maximum retried health check count in a health check session"},
+			"max_duration":        {GAUGE, "Maximum health check duration in Millie seconds"},
+			"min_duration":        {GAUGE, "Minimum health check duration in Millie seconds"},
+			"average_duration":    {GAUGE, "Average health check duration in Millie seconds"},
 		},
 		"pool_processes": {
-			"pool_pid":                  {DISCARD, "PID of Pgpool-II child processes"},
-			"database":                  {DISCARD, "Database name of the currently active backend connection"},
+			"pool_pid": {DISCARD, "PID of Pgpool-II child processes"},
+			"database": {DISCARD, "Database name of the currently active backend connection"},
 		},
 		"pool_cache": {
-			"cache_hit_ratio":           {GAUGE, "Query cache hit ratio"},
-			"num_hash_entries":          {GAUGE, "Number of total hash entries"},
-			"used_hash_entries":         {GAUGE, "Number of used hash entries"},
-			"num_cache_entries":         {GAUGE, "Number of used cache entries"},
-			"used_cache_entries_size":   {GAUGE, "Total size of used cache size"},
-			"free_cache_entries_size":   {GAUGE, "Total size of free cache size"},
+			"cache_hit_ratio":         {GAUGE, "Query cache hit ratio"},
+			"num_hash_entries":        {GAUGE, "Number of total hash entries"},
+			"used_hash_entries":       {GAUGE, "Number of used hash entries"},
+			"num_cache_entries":       {GAUGE, "Number of used cache entries"},
+			"used_cache_entries_size": {GAUGE, "Total size of used cache size"},
+			"free_cache_entries_size": {GAUGE, "Total size of free cache size"},
 		},
 	}
 )
@@ -329,6 +328,11 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_used"), "Number of used child processes", nil, nil),
 			prometheus.GaugeValue,
 			frontend_used,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_used_ratio"), "Ratio of child processes to total processes", nil, nil),
+			prometheus.GaugeValue,
+			frontend_used/frontend_total,
 		)
 
 		return nonfatalErrors, nil
@@ -473,9 +477,9 @@ func dbToString(t interface{}) (string, bool) {
 }
 
 // Convert bool to int.
-func parseStatusField(value string) (float64) {
+func parseStatusField(value string) float64 {
 	switch value {
-		case "true", "up", "waiting":
+	case "true", "up", "waiting":
 		return 1.0
 	case "false", "unused", "down":
 		return 0.0
