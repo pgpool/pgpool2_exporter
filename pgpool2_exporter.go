@@ -299,6 +299,7 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 
 	// Read from the result of "SHOW pool_processes"
 	if namespace == "pool_processes" {
+		frontendByUserDb := make(map[string]map[string]int)
 		var frontend_total float64
 		var frontend_used float64
 
@@ -309,12 +310,37 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 			}
 			frontend_total++
 			// Loop over column names to find currently connected backend database
+			var valueDatabase string
+			var valueUsername string
 			for idx, columnName := range columnNames {
-				if columnName == "database" {
-					if valueDatabase, _ := dbToString(columnData[idx]); len(valueDatabase) != 0 {
-						frontend_used++
-					}
+				switch columnName {
+				case "database":
+					valueDatabase, _ = dbToString(columnData[idx])
+				case "username":
+					valueUsername, _ = dbToString(columnData[idx])
 				}
+			}
+			if len(valueDatabase) > 0 && len(valueUsername) > 0 {
+				frontend_used++
+				dbCount, ok := frontendByUserDb[valueUsername]
+				if !ok {
+					dbCount = map[string]int{valueDatabase: 0}
+				}
+				dbCount[valueDatabase]++
+				frontendByUserDb[valueUsername] = dbCount
+			}
+		}
+
+		variableLabels := []string{"username", "database"}
+		for userName, dbs := range frontendByUserDb {
+			for dbName, count := range dbs {
+				labels := []string{userName, dbName}
+				ch <- prometheus.MustNewConstMetric(
+					prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_used"), "Number of used child processes", variableLabels, nil),
+					prometheus.GaugeValue,
+					float64(count),
+					labels...,
+				)
 			}
 		}
 
@@ -323,11 +349,6 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_total"), "Number of total child processed", nil, nil),
 			prometheus.GaugeValue,
 			frontend_total,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_used"), "Number of used child processes", nil, nil),
-			prometheus.GaugeValue,
-			frontend_used,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "frontend_used_ratio"), "Ratio of child processes to total processes", nil, nil),
