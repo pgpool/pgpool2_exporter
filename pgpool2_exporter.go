@@ -447,12 +447,18 @@ func dbToFloat64(t interface{}) (float64, bool) {
 	case []byte:
 		// Try and convert to string and then parse to a float64
 		strV := string(v)
+		if strV == "-nan" || strV == "nan" {
+			return math.NaN(), true
+		}
 		result, err := strconv.ParseFloat(strV, 64)
 		if err != nil {
 			return math.NaN(), false
 		}
 		return result, true
 	case string:
+		if v == "-nan" || v == "nan" {
+			return math.NaN(), true
+		}
 		result, err := strconv.ParseFloat(v, 64)
 		if err != nil {
 			level.Error(logger).Log("msg", "Could not parse string", "err", err)
