@@ -36,7 +36,7 @@ import (
 	"time"
 
 	"github.com/blang/semver"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -850,6 +850,8 @@ func main() {
 	kingpin.Version(version.Print("pgpool2_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
+
+	logger = promlog.New(promlogConfig)
 
 	dsn := os.Getenv("DATA_SOURCE_NAME")
 	exporter := NewExporter(dsn, namespace)
