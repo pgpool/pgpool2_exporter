@@ -208,6 +208,9 @@ var (
 			"pool_pid": {DISCARD, "PID of Pgpool-II child processes"},
 			"database": {DISCARD, "Database name of the currently active backend connection"},
 		},
+		"pool_pools": {
+			"pool_pid": {DISCARD, "PID of Pgpool-II child processes"},
+		},
 		"pool_cache": {
 			"cache_hit_ratio":         {GAUGE, "Query cache hit ratio"},
 			"num_hash_entries":        {GAUGE, "Number of total hash entries"},
@@ -296,6 +299,124 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 	}
 
 	nonfatalErrors := []error{}
+
+	// Read from the result of "SHOW pool_pools"
+	if namespace == "pool_pools" {
+
+		totalBackends := float64(0)
+		totalBackendsInUse := float64(0)
+
+		// pool_pid -> pool_id -> backend_id ->username -> database -> count
+		backendsInUse := make(map[string]map[string]map[string]map[string]map[string]float64)
+
+		totalBackendsByProcess := make(map[string]float64)
+
+		for rows.Next() {
+			err = rows.Scan(scanArgs...)
+			if err != nil {
+				return []error{}, errors.New(fmt.Sprintln("Error retrieving rows:", namespace, err))
+			}
+			var valueDatabase string
+			var valueUsername string
+			var valuePoolPid string
+			var valuePoolId string
+			var valueBackendId string
+			for idx, columnName := range columnNames {
+				switch columnName {
+				case "pool_pid":
+					valuePoolPid, _ = dbToString(columnData[idx])
+				case "pool_id":
+					valuePoolId, _ = dbToString(columnData[idx])
+				case "backend_id":
+					valueBackendId, _ = dbToString(columnData[idx])
+				case "database":
+					valueDatabase, _ = dbToString(columnData[idx])
+				case "username":
+					valueUsername, _ = dbToString(columnData[idx])
+				}
+			}
+			if len(valuePoolPid) > 0 {
+				totalBackends++
+				totalBackendsByProcess[valuePoolPid]++
+			}
+			if len(valueUsername) > 0 {
+				totalBackendsInUse++
+				_, ok := backendsInUse[valuePoolPid]
+				if !ok {
+					backendsInUse[valuePoolPid] = make(map[string]map[string]map[string]map[string]float64)
+				}
+				_, ok = backendsInUse[valuePoolPid][valuePoolId]
+				if !ok {
+					backendsInUse[valuePoolPid][valuePoolId] = make(map[string]map[string]map[string]float64)
+				}
+				_, ok = backendsInUse[valuePoolPid][valuePoolId][valueBackendId]
+				if !ok {
+					backendsInUse[valuePoolPid][valuePoolId][valueBackendId] = make(map[string]map[string]float64)
+				}
+				_, ok = backendsInUse[valuePoolPid][valuePoolId][valueBackendId][valueUsername]
+				if !ok {
+					backendsInUse[valuePoolPid][valuePoolId][valueBackendId][valueUsername] = make(map[string]float64)
+				}
+				backendsInUse[valuePoolPid][valuePoolId][valueBackendId][valueUsername][valueDatabase]++
+			}
+		}
+
+		for poolPid, poolIds := range backendsInUse {
+			var usedProcessBackends float64
+
+			for poolId, backendIds := range poolIds {
+				for backendId, userNames := range backendIds {
+					for userName, dbNames := range userNames {
+						for dbName, count := range dbNames {
+
+							usedProcessBackends++
+							variableLabels := []string{"pool_pid", "pool_id", "backend_id", "username", "database"}
+							labels := []string{poolPid, poolId, backendId, userName, dbName}
+							ch <- prometheus.MustNewConstMetric(
+								prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_by_process_used"), "Number of backend connection slots in use", variableLabels, nil),
+								prometheus.GaugeValue,
+								count,
+								labels...,
+							)
+
+						}
+					}
+				}
+			}
+			variableLabels := []string{"pool_pid"}
+			labels := []string{poolPid}
+			ch <- prometheus.MustNewConstMetric(
+				prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_by_process_used_ratio"), "Number of backend connection slots in use", variableLabels, nil),
+				prometheus.GaugeValue,
+				usedProcessBackends/totalBackendsByProcess[poolPid],
+				labels...,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_by_process_total"), "Number of backend connection slots in use", variableLabels, nil),
+				prometheus.GaugeValue,
+				totalBackendsByProcess[poolPid],
+				labels...,
+			)
+		}
+
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_total"), "Number of total possible backend connection slots", nil, nil),
+			prometheus.GaugeValue,
+			totalBackends,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_used"), "Number of backend connection slots in use", nil, nil),
+			prometheus.GaugeValue,
+			totalBackendsInUse,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(prometheus.BuildFQName("pgpool2", "", "backend_used_ratio"), "Ratio of backend connections in use to total backend connection slots", nil, nil),
+			prometheus.GaugeValue,
+			totalBackendsInUse/totalBackends,
+		)
+
+		return nonfatalErrors, nil
+	}
 
 	// Read from the result of "SHOW pool_processes"
 	if namespace == "pool_processes" {
