@@ -20,14 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-package main
+package pgpool2_exporter
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -39,23 +38,20 @@ import (
 	"github.com/go-kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
-	"github.com/prometheus/common/version"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	listenAddress = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
-	metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-	logger        = promlog.New(&promlog.Config{})
+	ListenAddress = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9719").String()
+	MetricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	Logger        = promlog.New(&promlog.Config{})
 )
 
 const (
-	namespace   = "pgpool2"
+	Namespace   = "pgpool2"
 	exporter    = "exporter"
-	landingPage = `
+	LandingPage = `
 	<html>
 		<head>
 			<title>Pgpool-II Exporter</title>
@@ -160,33 +156,33 @@ type Exporter struct {
 	error        prometheus.Gauge
 	totalScrapes prometheus.Counter
 	metricMap    map[string]MetricMapNamespace
-	db           *sql.DB
+	DB           *sql.DB
 }
 
 var (
 	metricMaps = map[string]map[string]ColumnMapping{
 		"pool_nodes": {
-			"hostname":                  {LABEL, "Backend hostname"},
-			"port":                      {LABEL, "Backend port"},
-			"role":                      {LABEL, "Role (primary or standby)"},
-			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"select_cnt":                {COUNTER, "SELECT statement counts issued to each backend"},
-			"replication_delay":         {GAUGE, "Replication delay"},
+			"hostname":          {LABEL, "Backend hostname"},
+			"port":              {LABEL, "Backend port"},
+			"role":              {LABEL, "Role (primary or standby)"},
+			"status":            {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"select_cnt":        {COUNTER, "SELECT statement counts issued to each backend"},
+			"replication_delay": {GAUGE, "Replication delay"},
 		},
 		"pool_backend_stats": {
-			"hostname":                  {LABEL, "Backend hostname"},
-			"port":                      {LABEL, "Backend port"},
-			"role":                      {LABEL, "Role (primary or standby)"},
-			"status":                    {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
-			"select_cnt":                {COUNTER, "SELECT statement counts issued to each backend"},
-			"insert_cnt":                {COUNTER, "INSERT statement counts issued to each backend"},
-			"update_cnt":                {COUNTER, "UPDATE statement counts issued to each backend"},
-			"delete_cnt":                {COUNTER, "DELETE statement counts issued to each backend"},
-			"ddl_cnt":                   {COUNTER, "DDL statement counts issued to each backend"},
-			"other_cnt":                 {COUNTER, "other statement counts issued to each backend"},
-			"panic_cnt":                 {COUNTER, "Panic message counts returned from backend"},
-			"fatal_cnt":                 {COUNTER, "Fatal message counts returned from backend)"},
-			"error_cnt":                 {COUNTER, "Error message counts returned from backend"},
+			"hostname":   {LABEL, "Backend hostname"},
+			"port":       {LABEL, "Backend port"},
+			"role":       {LABEL, "Role (primary or standby)"},
+			"status":     {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"select_cnt": {COUNTER, "SELECT statement counts issued to each backend"},
+			"insert_cnt": {COUNTER, "INSERT statement counts issued to each backend"},
+			"update_cnt": {COUNTER, "UPDATE statement counts issued to each backend"},
+			"delete_cnt": {COUNTER, "DELETE statement counts issued to each backend"},
+			"ddl_cnt":    {COUNTER, "DDL statement counts issued to each backend"},
+			"other_cnt":  {COUNTER, "other statement counts issued to each backend"},
+			"panic_cnt":  {COUNTER, "Panic message counts returned from backend"},
+			"fatal_cnt":  {COUNTER, "Fatal message counts returned from backend)"},
+			"error_cnt":  {COUNTER, "Error message counts returned from backend"},
 		},
 		"pool_health_check_stats": {
 			"hostname":            {LABEL, "Backend hostname"},
@@ -225,14 +221,14 @@ var (
 // Pgpool-II version
 var pgpoolVersionRegex = regexp.MustCompile(`^((\d+)(\.\d+)(\.\d+)?)`)
 var version42 = semver.MustParse("4.2.0")
-var pgpoolSemver semver.Version
+var PgpoolSemver semver.Version
 
 func NewExporter(dsn string, namespace string) *Exporter {
 
 	db, err := getDBConn(dsn)
 
 	if err != nil {
-		level.Error(logger).Log("err", err)
+		level.Error(Logger).Log("err", err)
 		os.Exit(1)
 	}
 
@@ -263,7 +259,7 @@ func NewExporter(dsn string, namespace string) *Exporter {
 			Help:      "Whether the last scrape of metrics from Pgpool-II resulted in an error (1 for error, 0 for success).",
 		}),
 		metricMap: makeDescMap(metricMaps, namespace),
-		db:        db,
+		DB:        db,
 	}
 }
 
@@ -582,7 +578,7 @@ func dbToFloat64(t interface{}) (float64, bool) {
 		}
 		result, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			level.Error(logger).Log("msg", "Could not parse string", "err", err)
+			level.Error(Logger).Log("msg", "Could not parse string", "err", err)
 			return math.NaN(), false
 		}
 		return result, true
@@ -636,7 +632,7 @@ func parseStatusField(value string) float64 {
 }
 
 // Mask user password in DSN
-func maskPassword(dsn string) string {
+func MaskPassword(dsn string) string {
 	pDSN, err := url.Parse(dsn)
 	if err != nil {
 		return "could not parse DATA_SOURCE_NAME"
@@ -650,9 +646,9 @@ func maskPassword(dsn string) string {
 }
 
 // Retrieve Pgpool-II version.
-func queryVersion(db *sql.DB) (semver.Version, error) {
+func QueryVersion(db *sql.DB) (semver.Version, error) {
 
-	level.Debug(logger).Log("msg", "Querying Pgpool-II version")
+	level.Debug(Logger).Log("msg", "Querying Pgpool-II version")
 
 	versionRows, err := db.Query("SHOW POOL_VERSION;")
 	if err != nil {
@@ -679,7 +675,7 @@ func queryVersion(db *sql.DB) (semver.Version, error) {
 
 	v := pgpoolVersionRegex.FindStringSubmatch(pgpoolVersion)
 	if len(v) > 1 {
-		level.Debug(logger).Log("pgpool_version", v[1])
+		level.Debug(Logger).Log("pgpool_version", v[1])
 		return semver.ParseTolerant(v[1])
 	}
 
@@ -694,22 +690,22 @@ func queryNamespaceMappings(ch chan<- prometheus.Metric, db *sql.DB, metricMap m
 	for namespace, mapping := range metricMap {
 		// pool_backend_stats and pool_health_check_stats can not be used before 4.1.
 		if namespace == "pool_backend_stats" || namespace == "pool_health_check_stats" {
-			if pgpoolSemver.LT(version42) {
+			if PgpoolSemver.LT(version42) {
 				continue
 			}
 		}
 
-		level.Debug(logger).Log("msg", "Querying namespace", "namespace", namespace)
+		level.Debug(Logger).Log("msg", "Querying namespace", "namespace", namespace)
 		nonFatalErrors, err := queryNamespaceMapping(ch, db, namespace, mapping)
 		// Serious error - a namespace disappeard
 		if err != nil {
 			namespaceErrors[namespace] = err
-			level.Info(logger).Log("msg", "namespace disappeard", "err", err)
+			level.Info(Logger).Log("msg", "namespace disappeard", "err", err)
 		}
 		// Non-serious errors - likely version or parsing problems.
 		if len(nonFatalErrors) > 0 {
 			for _, err := range nonFatalErrors {
-				level.Info(logger).Log("msg", "error parsing", "err", err.Error())
+				level.Info(Logger).Log("msg", "error parsing", "err", err.Error())
 			}
 		}
 	}
@@ -767,20 +763,20 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 	}(time.Now())
 
 	// Check connection availability and close the connection if it fails.
-	if err = ping(e.db); err != nil {
-		level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
-		if cerr := e.db.Close(); cerr != nil {
-			level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
+	if err = ping(e.DB); err != nil {
+		level.Error(Logger).Log("msg", "Error pinging Pgpool-II", "err", err)
+		if cerr := e.DB.Close(); cerr != nil {
+			level.Error(Logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 		}
-		level.Info(logger).Log("msg", "Reconnecting to Pgpool-II")
-		e.db, err = sql.Open("postgres", e.dsn)
-		e.db.SetMaxOpenConns(1)
-		e.db.SetMaxIdleConns(1)
+		level.Info(Logger).Log("msg", "Reconnecting to Pgpool-II")
+		e.DB, err = sql.Open("postgres", e.dsn)
+		e.DB.SetMaxOpenConns(1)
+		e.DB.SetMaxIdleConns(1)
 
-		if err = ping(e.db); err != nil {
-			level.Error(logger).Log("msg", "Error pinging Pgpool-II", "err", err)
-			if cerr := e.db.Close(); cerr != nil {
-				level.Error(logger).Log("msg", "Error while closing non-pinging connection", "err", err)
+		if err = ping(e.DB); err != nil {
+			level.Error(Logger).Log("msg", "Error pinging Pgpool-II", "err", err)
+			if cerr := e.DB.Close(); cerr != nil {
+				level.Error(Logger).Log("msg", "Error while closing non-pinging connection", "err", err)
 			}
 			e.up.Set(0)
 			return
@@ -793,9 +789,9 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 	e.mutex.RLock()
 	defer e.mutex.RUnlock()
 
-	errMap := queryNamespaceMappings(ch, e.db, e.metricMap)
+	errMap := queryNamespaceMappings(ch, e.DB, e.metricMap)
 	if len(errMap) > 0 {
-		level.Error(logger).Log("err", errMap)
+		level.Error(Logger).Log("err", errMap)
 		e.error.Set(1)
 	}
 }
@@ -848,41 +844,4 @@ func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace strin
 	}
 
 	return metricMap
-}
-
-func main() {
-	promlogConfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogConfig)
-	kingpin.Version(version.Print("pgpool2_exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-
-	logger = promlog.New(promlogConfig)
-
-	dsn := os.Getenv("DATA_SOURCE_NAME")
-	exporter := NewExporter(dsn, namespace)
-	defer func() {
-		exporter.db.Close()
-	}()
-	prometheus.MustRegister(exporter)
-
-	// Retrieve Pgpool-II version
-	v, err := queryVersion(exporter.db)
-	if err != nil {
-		level.Error(logger).Log("err", err)
-	}
-	pgpoolSemver = v
-
-	level.Info(logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info(), "dsn", maskPassword(dsn))
-	level.Info(logger).Log("msg", "Listening on address", "address", *listenAddress)
-
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(landingPage, *metricsPath)))
-	})
-
-	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
-		level.Error(logger).Log("err", err)
-		os.Exit(1)
-	}
 }
