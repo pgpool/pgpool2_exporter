@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"net/url"
 
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,7 +26,17 @@ func main() {
 
 	exp.Logger = promlog.New(promlogConfig)
 
-	dsn := os.Getenv("DATA_SOURCE_NAME")
+	var dsn = os.Getenv("DATA_SOURCE_NAME")
+
+	if len(dsn) == 0 {
+		var user = os.Getenv("DATA_SOURCE_USER")
+		var pass = os.Getenv("DATA_SOURCE_PASS")
+		var uri = os.Getenv("DATA_SOURCE_URI")
+		ui := url.UserPassword(user, pass).String()
+
+		dsn = "postgresql://" + ui + "@" + uri
+	}
+
 	exporter := exp.NewExporter(dsn, exp.Namespace)
 	defer func() {
 		exporter.DB.Close()
