@@ -13,9 +13,15 @@ $ make
 
 ### Running
 
-Running using an environment variable:
+Running using environment variables:
 ```
-$ export DATA_SOURCE_NAME="postgresql://user:password@hostname:port/dbname?sslmode=disable"
+$ export DATA_SOURCE_NAME="postgresql://<user>:<password>@<hostname>:<port>/<dbname>?sslmode=<sslmode>"
+OR
+# If your password contains special characters, use the environment variables below:
+export DATA_SOURCE_USER="<user>"
+export DATA_SOURCE_PASS="<password>"
+export DATA_SOURCE_URI="<hostname>:<port>/<dbname>?sslmode=<sslmode>"
+
 $ ./pgpool2_exporter <flags>
 ```
     
@@ -62,7 +68,10 @@ This package is available for Docker. The following environment variables config
 
 * `PGPOOL_SERVICE_PORT`
   Pgpool-II port number. Default is `9999`.
-
+  
+* `SSLMODE`
+   Whether or not to use SSL. Default is `disable`. Valid values: disable, require, verify-ca, verify-full.
+  
 ```
 docker run --name pgpool2_exporter \
   --net=host --rm \
@@ -71,6 +80,7 @@ docker run --name pgpool2_exporter \
   -e POSTGRES_DATABASE=<database> \
   -e PGPOOL_SERVICE=<hostname> \
   -e PGPOOL_SERVICE_PORT=<port> \
+  -e SSLMODE=<sslmode> \
   pgpool/pgpool2_exporter:latest
 ```
   
