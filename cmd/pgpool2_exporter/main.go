@@ -16,7 +16,9 @@ import (
 
 	exp "github.com/pgpool/pgpool2_exporter"
 )
-
+var (
+	constantLabelsList     = kingpin.Flag("constantLabels", "A list of label=value separated by comma(,).").Default("").Envar("PG_EXPORTER_CONSTANT_LABELS").String()
+)
 func main() {
 	promlogConfig := &promlog.Config{}
 	flag.AddFlags(kingpin.CommandLine, promlogConfig)
@@ -37,7 +39,7 @@ func main() {
 		dsn = "postgresql://" + ui + "@" + uri
 	}
 
-	exporter := exp.NewExporter(dsn, exp.Namespace)
+	exporter := exp.NewExporter(dsn, exp.Namespace, *constantLabelsList)
 	defer func() {
 		exporter.DB.Close()
 	}()
