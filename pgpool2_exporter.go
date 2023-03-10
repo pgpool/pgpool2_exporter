@@ -227,9 +227,13 @@ func NewExporter(dsn string, namespace string) *Exporter {
 
 	db, err := getDBConn(dsn)
 
-	if err != nil {
+	// If pgpool is down on exporter startup, keep waiting for pgpool to be up
+	for err != nil {
 		level.Error(Logger).Log("err", err)
-		os.Exit(1)
+		level.Info(Logger).Log("info", "Sleeping for 5 seconds before trying to connect again")
+		time.Sleep(5 * time.Second)
+
+		db, err = getDBConn(dsn)
 	}
 
 	return &Exporter{
