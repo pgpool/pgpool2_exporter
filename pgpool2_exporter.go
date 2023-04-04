@@ -26,11 +26,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math"
 	"net/url"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -636,6 +639,16 @@ func MaskPassword(dsn string) string {
 	pDSN, err := url.Parse(dsn)
 	if err != nil {
 		return "could not parse DATA_SOURCE_NAME"
+	}
+	// file content from file DATA_SOURCE_NAME_FILE
+	if filename := os.Getenv("DATA_SOURCE_NAME_FILE"); filename != "" {
+		if fileContents, err := ioutil.ReadFile(filename); err != nil {
+			log.Fatal(err)
+		} else {
+			dsn = strings.TrimSpace(string(fileContents))
+		}
+	} else {
+		dsn = os.Getenv("DATA_SOURCE_NAME")
 	}
 	// Mask user password in DSN
 	if pDSN.User != nil {
