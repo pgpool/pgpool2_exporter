@@ -153,6 +153,7 @@ type Exporter struct {
 	mutex        sync.RWMutex
 	duration     prometheus.Gauge
 	up           prometheus.Gauge
+	version      prometheus.Gauge
 	error        prometheus.Gauge
 	totalScrapes prometheus.Counter
 	metricMap    map[string]MetricMapNamespace
@@ -232,6 +233,13 @@ func NewExporter(dsn string, namespace string) *Exporter {
 		os.Exit(1)
 	}
 
+	version, err := QueryVersion(db)
+
+	if err != nil {
+		level.Error(Logger).Log("err", err)
+		os.Exit(1)
+	}
+
 	return &Exporter{
 		dsn:       dsn,
 		namespace: namespace,
@@ -239,6 +247,15 @@ func NewExporter(dsn string, namespace string) *Exporter {
 			Namespace: namespace,
 			Name:      "up",
 			Help:      "Whether the Pgpool-II server is up (1 for yes, 0 for no).",
+		}),
+		
+		version: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name: "version",
+			Help: "Pgpool-II version",
+			ConstLabels: prometheus.Labels{
+				"version": version.String(),
+			},
 		}),
 
 		duration: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -746,6 +763,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.scrape(ch)
 	ch <- e.duration
 	ch <- e.up
+	ch <- e.version
 	ch <- e.totalScrapes
 	ch <- e.error
 }
