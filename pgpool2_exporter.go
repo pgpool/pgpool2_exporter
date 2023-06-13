@@ -208,12 +208,15 @@ var (
 			"pool_pid": {DISCARD, "PID of Pgpool-II child processes"},
 		},
 		"pool_cache": {
-			"cache_hit_ratio":         {GAUGE, "Query cache hit ratio"},
-			"num_hash_entries":        {GAUGE, "Number of total hash entries"},
-			"used_hash_entries":       {GAUGE, "Number of used hash entries"},
-			"num_cache_entries":       {GAUGE, "Number of used cache entries"},
-			"used_cache_entries_size": {GAUGE, "Total size of used cache size"},
-			"free_cache_entries_size": {GAUGE, "Total size of free cache size"},
+			"num_cache_hits":              {GAUGE, "The number of hits against the query cache"},
+			"num_selects":                 {GAUGE, "The number of SELECT that did not hit against the query cache"},
+			"cache_hit_ratio":             {GAUGE, "Query cache hit ratio"},
+			"num_hash_entries":            {GAUGE, "Number of total hash entries"},
+			"used_hash_entries":           {GAUGE, "Number of used hash entries"},
+			"num_cache_entries":           {GAUGE, "Number of used cache entries"},
+			"used_cache_entries_size":     {GAUGE, "Total size in bytes of used cache size"},
+			"free_cache_entries_size":     {GAUGE, "Total size in bytes of free cache size"},
+			"fragment_cache_entries_size": {GAUGE, "Total size in bytes of the fragmented cache"},
 		},
 	}
 )
