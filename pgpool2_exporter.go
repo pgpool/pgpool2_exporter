@@ -165,7 +165,8 @@ var (
 			"hostname":          {LABEL, "Backend hostname"},
 			"port":              {LABEL, "Backend port"},
 			"role":              {LABEL, "Role (primary or standby)"},
-			"status":            {GAUGE, "Backend node Status (1 for up or waiting, 0 for down or unused)"},
+			"status":            {GAUGE, "Pool node status (1 for up or waiting, 0 for down or unused)"},
+			"pg_status":         {GAUGE, "Backend pg status (1 for up or waiting, 0 for down or unused)"},
 			"select_cnt":        {COUNTER, "SELECT statement counts issued to each backend"},
 			"replication_delay": {GAUGE, "Replication delay"},
 		},
@@ -504,7 +505,7 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 				}
 
 				// If status column, convert string to int.
-				if columnName == "status" {
+				if columnName == "status" || columnName == "pg_status" {
 					valueString, ok := dbToString(columnData[idx])
 					if !ok {
 						nonfatalErrors = append(nonfatalErrors, errors.New(fmt.Sprintln("Unexpected error parsing column: ", namespace, columnName, columnData[idx])))
