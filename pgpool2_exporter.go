@@ -29,6 +29,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"strings"
 	"regexp"
 	"strconv"
 	"sync"
@@ -157,6 +158,7 @@ type Exporter struct {
 	totalScrapes prometheus.Counter
 	metricMap    map[string]MetricMapNamespace
 	DB           *sql.DB
+	constantLabels prometheus.Labels
 }
 
 var (
@@ -226,7 +228,7 @@ var pgpoolVersionRegex = regexp.MustCompile(`^((\d+)(\.\d+)(\.\d+)?)`)
 var version42 = semver.MustParse("4.2.0")
 var PgpoolSemver semver.Version
 
-func NewExporter(dsn string, namespace string) *Exporter {
+func NewExporter(dsn string, namespace string, constantLabels string) *Exporter {
 
 	db, err := getDBConn(dsn)
 
@@ -246,26 +248,30 @@ func NewExporter(dsn string, namespace string) *Exporter {
 			Namespace: namespace,
 			Name:      "up",
 			Help:      "Whether the Pgpool-II server is up (1 for yes, 0 for no).",
+			ConstLabels: parseConstLabels(constantLabels),
 		}),
 
 		duration: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "last_scrape_duration_seconds",
 			Help:      "Duration of the last scrape of metrics from Pgpool-II.",
+			ConstLabels: parseConstLabels(constantLabels),
 		}),
 
 		totalScrapes: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "scrapes_total",
 			Help:      "Total number of times Pgpool-II has been scraped for metrics.",
+			ConstLabels: parseConstLabels(constantLabels),
 		}),
 
 		error: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "last_scrape_error",
 			Help:      "Whether the last scrape of metrics from Pgpool-II resulted in an error (1 for error, 0 for success).",
+			ConstLabels: parseConstLabels(constantLabels),
 		}),
-		metricMap: makeDescMap(metricMaps, namespace),
+		metricMap: makeDescMap(metricMaps, namespace, parseConstLabels(constantLabels)),
 		DB:        db,
 	}
 }
@@ -282,6 +288,9 @@ func queryNamespaceMapping(ch chan<- prometheus.Metric, db *sql.DB, namespace st
 	}
 
 	defer rows.Close()
+
+	//add constant labels
+
 
 	var columnNames []string
 	columnNames, err = rows.Columns()
@@ -638,6 +647,33 @@ func parseStatusField(value string) float64 {
 	return 0.0
 }
 
+
+func parseConstLabels(s string) prometheus.Labels {
+	labels := make(prometheus.Labels)
+
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return labels
+	}
+
+	parts := strings.Split(s, ",")
+	for _, p := range parts {
+		keyValue := strings.Split(strings.TrimSpace(p), "=")
+		if len(keyValue) != 2 {
+			level.Error(Logger).Log(`Wrong constant labels format, should be "key=value"`, "input", p)
+			continue
+		}
+		key := strings.TrimSpace(keyValue[0])
+		value := strings.TrimSpace(keyValue[1])
+		if key == "" || value == "" {
+			continue
+		}
+		labels[key] = value
+	}
+
+	return labels
+}
+
 // Mask user password in DSN
 func MaskPassword(dsn string) string {
 	pDSN, err := url.Parse(dsn)
@@ -804,7 +840,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 }
 
 // Turn the MetricMap column mapping into a prometheus descriptor mapping.
-func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace string) map[string]MetricMapNamespace {
+func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace string, constantLabels prometheus.Labels) map[string]MetricMapNamespace {
 	var metricMap = make(map[string]MetricMapNamespace)
 
 	for metricNamespace, mappings := range metricMaps {
@@ -831,7 +867,7 @@ func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace strin
 			case COUNTER:
 				thisMap[columnName] = MetricMap{
 					vtype: prometheus.CounterValue,
-					desc:  prometheus.NewDesc(fmt.Sprintf("%s_%s_%s", namespace, metricNamespace, columnName), columnMapping.description, variableLabels, nil),
+					desc:  prometheus.NewDesc(fmt.Sprintf("%s_%s_%s", namespace, metricNamespace, columnName), columnMapping.description, variableLabels, constantLabels),
 					conversion: func(in interface{}) (float64, bool) {
 						return dbToFloat64(in)
 					},
@@ -839,7 +875,7 @@ func makeDescMap(metricMaps map[string]map[string]ColumnMapping, namespace strin
 			case GAUGE:
 				thisMap[columnName] = MetricMap{
 					vtype: prometheus.GaugeValue,
-					desc:  prometheus.NewDesc(fmt.Sprintf("%s_%s_%s", namespace, metricNamespace, columnName), columnMapping.description, variableLabels, nil),
+					desc:  prometheus.NewDesc(fmt.Sprintf("%s_%s_%s", namespace, metricNamespace, columnName), columnMapping.description, variableLabels, constantLabels),
 					conversion: func(in interface{}) (float64, bool) {
 						return dbToFloat64(in)
 					},
