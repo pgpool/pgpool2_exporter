@@ -209,12 +209,15 @@ var (
 			"pool_pid": {DISCARD, "PID of Pgpool-II child processes"},
 		},
 		"pool_cache": {
-			"cache_hit_ratio":         {GAUGE, "Query cache hit ratio"},
-			"num_hash_entries":        {GAUGE, "Number of total hash entries"},
-			"used_hash_entries":       {GAUGE, "Number of used hash entries"},
-			"num_cache_entries":       {GAUGE, "Number of used cache entries"},
-			"used_cache_entries_size": {GAUGE, "Total size of used cache size"},
-			"free_cache_entries_size": {GAUGE, "Total size of free cache size"},
+			"num_cache_hits":              {GAUGE, "The number of hits against the query cache"},
+			"num_selects":                 {GAUGE, "The number of SELECT that did not hit against the query cache"},
+			"cache_hit_ratio":             {GAUGE, "Query cache hit ratio"},
+			"num_hash_entries":            {GAUGE, "Number of total hash entries"},
+			"used_hash_entries":           {GAUGE, "Number of used hash entries"},
+			"num_cache_entries":           {GAUGE, "Number of used cache entries"},
+			"used_cache_entries_size":     {GAUGE, "Total size in bytes of used cache size"},
+			"free_cache_entries_size":     {GAUGE, "Total size in bytes of free cache size"},
+			"fragment_cache_entries_size": {GAUGE, "Total size in bytes of the fragmented cache"},
 		},
 	}
 )
@@ -228,9 +231,13 @@ func NewExporter(dsn string, namespace string) *Exporter {
 
 	db, err := getDBConn(dsn)
 
-	if err != nil {
+	// If pgpool is down on exporter startup, keep waiting for pgpool to be up
+	for err != nil {
 		level.Error(Logger).Log("err", err)
-		os.Exit(1)
+		level.Info(Logger).Log("info", "Sleeping for 5 seconds before trying to connect again")
+		time.Sleep(5 * time.Second)
+
+		db, err = getDBConn(dsn)
 	}
 
 	version, err := QueryVersion(db)
