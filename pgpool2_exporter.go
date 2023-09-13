@@ -134,7 +134,7 @@ type MetricMapNamespace struct {
 type MetricMap struct {
 	discard    bool                 // Should metric be discarded during mapping?
 	vtype      prometheus.ValueType // Prometheus valuetype
-	namespace  string
+	// namespace  string
 	desc       *prometheus.Desc                  // Prometheus descriptor
 	conversion func(interface{}) (float64, bool) // Conversion function to turn PG result into float64
 }
