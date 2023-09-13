@@ -12,7 +12,7 @@ DOCKER_IMAGE_NAME       ?= pgpool2_exporter
 DOCKER_IMAGE_TAG        ?= $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
 
 
-build: promu
+build: clean promu
 	@echo ">> building binaries"
 	@$(PROMU) build --prefix $(PREFIX)
 
@@ -33,8 +33,12 @@ tarballs: crossbuild
 	@echo ">> building release tarballs"
 	@$(PROMU) crossbuild tarballs
 
-docker:
+docker: build
 	@echo ">> building docker image"
 	@docker build -t "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" .
 
-.PHONY: promu build crossbuild tarball tarballs docker
+clean:
+	@echo ">> cleaning up build output"
+	rm -f $(PREFIX)/pgpool2_exporter
+
+.PHONY: promu clean build crossbuild tarball tarballs docker
