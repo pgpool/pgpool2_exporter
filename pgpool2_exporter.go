@@ -34,12 +34,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/blang/semver"
 	"github.com/go-kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/promlog"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -132,8 +132,8 @@ type MetricMapNamespace struct {
 // Stores the prometheus metric description which a given column will be mapped
 // to by the collector
 type MetricMap struct {
-	discard    bool                 // Should metric be discarded during mapping?
-	vtype      prometheus.ValueType // Prometheus valuetype
+	discard bool                 // Should metric be discarded during mapping?
+	vtype   prometheus.ValueType // Prometheus valuetype
 	// namespace  string
 	desc       *prometheus.Desc                  // Prometheus descriptor
 	conversion func(interface{}) (float64, bool) // Conversion function to turn PG result into float64
@@ -255,11 +255,11 @@ func NewExporter(dsn string, namespace string) *Exporter {
 			Name:      "up",
 			Help:      "Whether the Pgpool-II server is up (1 for yes, 0 for no).",
 		}),
-		
+
 		version: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name: "version",
-			Help: "Pgpool-II version",
+			Name:      "version",
+			Help:      "Pgpool-II version",
 			ConstLabels: prometheus.Labels{
 				"version": version.String(),
 			},
