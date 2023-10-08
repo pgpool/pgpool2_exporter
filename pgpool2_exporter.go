@@ -34,12 +34,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/blang/semver"
 	"github.com/go-kit/log/level"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/promlog"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -132,9 +132,9 @@ type MetricMapNamespace struct {
 // Stores the prometheus metric description which a given column will be mapped
 // to by the collector
 type MetricMap struct {
-	discard    bool                 // Should metric be discarded during mapping?
-	vtype      prometheus.ValueType // Prometheus valuetype
-	namespace  string
+	discard bool                 // Should metric be discarded during mapping?
+	vtype   prometheus.ValueType // Prometheus valuetype
+	// namespace  string
 	desc       *prometheus.Desc                  // Prometheus descriptor
 	conversion func(interface{}) (float64, bool) // Conversion function to turn PG result into float64
 }
@@ -153,6 +153,7 @@ type Exporter struct {
 	mutex        sync.RWMutex
 	duration     prometheus.Gauge
 	up           prometheus.Gauge
+	version      prometheus.Gauge
 	error        prometheus.Gauge
 	totalScrapes prometheus.Counter
 	metricMap    map[string]MetricMapNamespace
@@ -239,6 +240,13 @@ func NewExporter(dsn string, namespace string) *Exporter {
 		db, err = getDBConn(dsn)
 	}
 
+	version, err := QueryVersion(db)
+
+	if err != nil {
+		level.Error(Logger).Log("err", err)
+		os.Exit(1)
+	}
+
 	return &Exporter{
 		dsn:       dsn,
 		namespace: namespace,
@@ -246,6 +254,15 @@ func NewExporter(dsn string, namespace string) *Exporter {
 			Namespace: namespace,
 			Name:      "up",
 			Help:      "Whether the Pgpool-II server is up (1 for yes, 0 for no).",
+		}),
+
+		version: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "version",
+			Help:      "Pgpool-II version",
+			ConstLabels: prometheus.Labels{
+				"version": version.String(),
+			},
 		}),
 
 		duration: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -753,6 +770,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.scrape(ch)
 	ch <- e.duration
 	ch <- e.up
+	ch <- e.version
 	ch <- e.totalScrapes
 	ch <- e.error
 }
