@@ -68,7 +68,19 @@ This package is available for Docker. The following environment variables config
 
 * `PGPOOL_SERVICE_PORT`
   Pgpool-II port number. Default is `9999`.
-  
+
+* `PGPOOL_LISTEN_ADDRESS`
+  Pgpool-II metrics listen address. Default is `9179`.
+
+* `PGPOOL_METRICS_PATH`
+  Pgpool-II metrics path. Default is `/metrics`.
+
+* `PGPOOL_LOG_LEVEL`
+  Pgpool-II log level. Default is `info`.
+
+* `PGPOOL_LOG_FORMAT`
+  Pgpool-II log format. Default is `logfmt`.
+
 * `SSLMODE`
    Whether or not to use SSL. Default is `disable`. Valid values: disable, require, verify-ca, verify-full.
   
@@ -80,6 +92,10 @@ docker run --name pgpool2_exporter \
   -e POSTGRES_DATABASE=<database> \
   -e PGPOOL_SERVICE=<hostname> \
   -e PGPOOL_SERVICE_PORT=<port> \
+  -e PGPOOL_LISTEN_ADDRESS=<listen port> \
+  -e PGPOOL_METRICS_PATH=<path> \
+  -e PGPOOL_LOG_LEVEL=<log level> \
+  -e PGPOOL_LOG_FORMAT=<log format> \
   -e SSLMODE=<sslmode> \
   pgpool/pgpool2_exporter:latest
 ```
