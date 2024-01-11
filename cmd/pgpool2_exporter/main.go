@@ -3,22 +3,27 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"net/url"
+	"os"
+	"strings"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	exp "github.com/pgpool/pgpool2_exporter"
+	"github.com/prometheus/exporter-toolkit/web"
+	"github.com/prometheus/exporter-toolkit/web/kingpinflag"
 )
 
 func main() {
 	promlogConfig := &promlog.Config{}
+	toolkitFlags := kingpinflag.AddFlags(kingpin.CommandLine, ":9719")
+	metricsPath := kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 	flag.AddFlags(kingpin.CommandLine, promlogConfig)
 	kingpin.Version(version.Print("pgpool2_exporter"))
 	kingpin.HelpFlag.Short('h')
@@ -51,14 +56,15 @@ func main() {
 	exp.PgpoolSemver = v
 
 	level.Info(exp.Logger).Log("msg", "Starting pgpool2_exporter", "version", version.Info(), "dsn", exp.MaskPassword(dsn))
-	level.Info(exp.Logger).Log("msg", "Listening on address", "address", *exp.ListenAddress)
+	level.Info(exp.Logger).Log("msg", "Listening on address", "address", strings.Join(*toolkitFlags.WebListenAddresses, ","))
 
-	http.Handle(*exp.MetricsPath, promhttp.Handler())
+	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(exp.LandingPage, *exp.MetricsPath)))
+		w.Write([]byte(fmt.Sprintf(exp.LandingPage, *metricsPath)))
 	})
 
-	if err := http.ListenAndServe(*exp.ListenAddress, nil); err != nil {
+	server := &http.Server{}
+	if err := web.ListenAndServe(server, toolkitFlags, exp.Logger); err != nil {
 		level.Error(exp.Logger).Log("err", err)
 		os.Exit(1)
 	}

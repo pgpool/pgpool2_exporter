@@ -41,6 +41,9 @@ $ ./pgpool2_exporter --help
 * `web.listen-address`
   Address on which to expose metrics and web interface. (default ":9719").
 
+* `web.config.file`
+  Path to configuration file that can enable TLS or authentication. See: https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md
+
 * `web.telemetry-path`
   Path under which to expose metrics. (default "/metrics")
   
@@ -117,3 +120,14 @@ pgpool2_pool_health_check_stats_max_retry_count | 4.2+ | Number of maximum retri
 pgpool2_pool_health_check_stats_max_duration | 4.2+ | Maximum health check duration in Millie seconds
 pgpool2_pool_health_check_stats_min_duration | 4.2+ | Minimum health check duration in Millie seconds
 pgpool2_pool_health_check_stats_average_duration | 4.2+ | Average health check duration in Millie seconds
+
+
+### TLS endpoint
+
+The exporter supports TLS via a new web configuration file.
+
+```
+./pgpool2_exporter --web.config.file=web-config.yml
+```
+
+See the [exporter-toolkit web-configuration](https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md) for more details.
