@@ -1,5 +1,6 @@
 GO     := go
 GOPATH := $(firstword $(subst :, ,$(shell $(GO) env GOPATH)))
+GOARCH ?= amd64
 
 PROMU       ?= $(GOPATH)/bin/promu
 pkgs         = $(shell $(GO) list ./... | grep -v /vendor/)
@@ -14,7 +15,8 @@ DOCKER_IMAGE_TAG        ?= $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
 
 build: promu
 	@echo ">> building binaries"
-	@$(PROMU) build --prefix $(PREFIX)
+	@$(PROMU) build -v --prefix $(PREFIX)
+	mv pgpool2_exporter pgpool2_exporter-$(GOARCH)
 
 crossbuild: promu
 	@echo ">> building cross-platform binaries"
@@ -35,6 +37,6 @@ tarballs: crossbuild
 
 docker:
 	@echo ">> building docker image"
-	@docker build -t "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" .
+	@docker buildx build --push --platform linux/amd64,linux/arm64 -t "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" .
 
 .PHONY: promu build crossbuild tarball tarballs docker

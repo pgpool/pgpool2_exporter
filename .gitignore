@@ -1,4 +1,4 @@
 /.build
 /.tarballs
-pgpool2_exporter
+pgpool2_exporter*
 *.tar.gz
